@@ -87,9 +87,6 @@
 		});
 	</script>
 	<script type="text/javascript">
-		var ActivityNodes = VoteDialogArguments.activityNodes;	//Multiple ActivityNodes are collected in Array.
-		var ActivityIdArr = VoteDialogArguments.activityIds;	//Multiple ActivityIds are collected in Array.
-		var AssgnIdArr = VoteDialogArguments.assignmentIds;	//Multiple AssignmentIds are collected in Array.
 		var MyActivity = VoteDialogArguments.activity;
 		var workflowName = VoteDialogArguments.wflName;
 		var workflowId = VoteDialogArguments.wflId;
@@ -103,7 +100,6 @@
 		var MyWflId = workflowId;
 
 		var MyAssID = VoteDialogArguments.assignmentId; //LOL :))
-				
 		var MyAssItem = getItemFromServer("<Item type='Activity Assignment' action='get' levels='1' id='"+MyAssID+"'/>");
 		var delegateID = 0;
 
@@ -111,6 +107,7 @@
 			populateNames();
 			populateVariables();
 			refreshFieldsColor();
+
 		};
 
 		function refreshFieldsColor(){
@@ -389,9 +386,9 @@
 				if (!dlgRes) {
 					return;
 				}
-				delegateID = dlgRes.itemID;			
+				delegateID = dlgRes.itemID;
 				delegate.value = dlgRes.keyed_name;
-				lastDelegateVal = delegate.value;			
+				lastDelegateVal = delegate.value;
 			});
 		}
 
@@ -589,7 +586,6 @@
 				}
 			}
 			function processVote(hash) {
-
 				if (MyPath == "Delegate")
 				{
 					if (mode == "complete") {
@@ -599,133 +595,115 @@
 						}
 					}
 				}
-				
+
 				var body = "";
-				var Count = 0;
-				
-				if(ActivityNodes===undefined){
-					Count = 1;
-				}
-				else{
-					Count = ActivityNodes.length;
-				}
-				
-				for(var x=0; x<Count; x++)
-				{
-					if(Count>1){
-						MyActivity = ActivityNodes[x];
-						MyActId = ActivityIdArr[x];
-						MyAssID = AssgnIdArr[x];
+				body += '<Item type="' + MyActivity.getAttribute('type') + '" action="EvaluateActivity">';
+				body += "<Activity>" + MyActId + "</Activity>";
+				body += "<ActivityAssignment>" + MyAssID + "</ActivityAssignment>";
+
+				body += "<Paths>";
+				body += "<Path id='" + pathID + "'><![CDATA[" + MyPathName + "]]></Path>";
+				body += "</Paths>";
+
+				body += "<DelegateTo>" + delegateID + "</DelegateTo>";
+
+				var taskList, task, taskID,
+					row_id, cell, sequence, is_required, task_complete,
+					validate = ("complete" === mode && "Delegate" !== MyPath && "Refuse" !== MyPath);
+
+				body += "<Tasks>";
+				taskList = MyActivity.selectNodes('Relationships/Item[@type="Activity Task"]');
+				for (var i = 0; i < taskList.length; i++) {
+					task = taskList[i];
+					taskID = aras.getItemProperty(task, "id");
+					row_id = taskID;
+
+					sequence = this.taskgrid.items_Experimental.get(row_id, "value", "sequence");
+					is_required = this.taskgrid.items_Experimental.get(row_id, "value", "required");
+					task_complete = this.taskgrid.items_Experimental.get(row_id, "value", "complete");
+					if (validate) {
+						if (is_required && !task_complete)
+						{
+							aras.AlertError(aras.getResource("", "inbasketvd.task_required", sequence), undefined, undefined, topWnd.window);
+							return;
+						}
 					}
-					
-					body += '<Item type="' + MyActivity.getAttribute('type') + '" action="EvaluateActivity">';
-					body += "<Activity>" + MyActId + "</Activity>";
-					body += "<ActivityAssignment>" + MyAssID + "</ActivityAssignment>";
 
-					body += "<Paths>";
-					body += "<Path id='" + pathID + "'><![CDATA[" + MyPathName + "]]></Path>";
-					body += "</Paths>";
+					body += "<Task id='" + taskID + "' completed='" + (task_complete ? 1 : 0) + "'></Task>";
+				}
+				body += "</Tasks>";
 
-					body += "<DelegateTo>" + delegateID + "</DelegateTo>";
+				var varList, actVar, varLabel, varType, varID, varValItem;
+				var elem, is_required, is_hidden, value;
 
-					var taskList, task, taskID,
-						row_id, cell, sequence, is_required, task_complete,
-						validate = ("complete" === mode && "Delegate" !== MyPath && "Refuse" !== MyPath);
+				body += "<Variables>";
+				varList = MyActivity.selectNodes('Relationships/Item[@type="Activity Variable"]');
+				for (i = 0; i < varList.length; i++) {
+					actVar = varList[i];
+					varLabel = aras.getItemProperty(actVar, "label");
+					if (varLabel == "") {
+						varLabel = aras.getItemProperty(actVar, "name");
+					}
+					varType = aras.getItemProperty(actVar, "datatype");
+					varID = aras.getItemProperty(actVar, "id");
+					is_required = (aras.getItemProperty(actVar, "is_required") == "1" ? true : false);
+					is_hidden = (aras.getItemProperty(actVar, "is_hidden") == "1" ? true : false);
+					value = "";
 
-					body += "<Tasks>";
-					taskList = MyActivity.selectNodes('Relationships/Item[@type="Activity Task"]');
-					for (var i = 0; i < taskList.length; i++) {
-						task = taskList[i];
-						taskID = aras.getItemProperty(task, "id");
-						row_id = taskID;
+					if (is_hidden) {
+						varValItem = MyAssItem.selectSingleNode("Relationships/Item[@type='Activity Variable Value' and variable='" + varID + "']");
+						if (!varValItem) {
+							aras.AlertError(aras.getResource("", "inbasketvd.act_variable_not_found_varid", varID), undefined, undefined, topWnd.window);
+							return;
+						}
 
-						sequence = this.taskgrid.items_Experimental.get(row_id, "value", "sequence");
-						is_required = this.taskgrid.items_Experimental.get(row_id, "value", "required");
-						task_complete = this.taskgrid.items_Experimental.get(row_id, "value", "complete");
-						if (validate) {
-							if (is_required && !task_complete)
-							{
-								aras.AlertError(aras.getResource("", "inbasketvd.task_required", sequence), undefined, undefined, topWnd.window);
-								return;
+						value = aras.getItemProperty(varValItem, "value");
+					}
+					else {
+						elem = document.getElementsByName(varID)[0];
+						if (!elem) return;
+
+						if (varType == "String" || varType == "Integer" || varType == "Float") {
+							value = elem.value;
+
+							if (validate) {
+								if (is_required && value == "") {
+									aras.AlertError(aras.getResource("", "inbasketvd.variable_required", varLabel), undefined, undefined, topWnd.window);
+									return;
+								}
 							}
 						}
-
-						body += "<Task id='" + taskID + "' completed='" + (task_complete ? 1 : 0) + "'></Task>";
-					}
-					body += "</Tasks>";
-
-					var varList, actVar, varLabel, varType, varID, varValItem;
-					var elem, is_required, is_hidden, value;
-
-					body += "<Variables>";
-					varList = MyActivity.selectNodes('Relationships/Item[@type="Activity Variable"]');
-					for (i = 0; i < varList.length; i++) {
-						actVar = varList[i];
-						varLabel = aras.getItemProperty(actVar, "label");
-						if (varLabel == "") {
-							varLabel = aras.getItemProperty(actVar, "name");
+						else if (varType == "Boolean") {
+							value = elem.checked ? "1" : "0";
 						}
-						varType = aras.getItemProperty(actVar, "datatype");
-						varID = aras.getItemProperty(actVar, "id");
-						is_required = (aras.getItemProperty(actVar, "is_required") == "1" ? true : false);
-						is_hidden = (aras.getItemProperty(actVar, "is_hidden") == "1" ? true : false);
-						value = "";
-
-						if (is_hidden) {
-							varValItem = MyAssItem.selectSingleNode("Relationships/Item[@type='Activity Variable Value' and variable='" + varID + "']");
-							if (!varValItem) {
-								aras.AlertError(aras.getResource("", "inbasketvd.act_variable_not_found_varid", varID), undefined, undefined, topWnd.window);
-								return;
-							}
-
-							value = aras.getItemProperty(varValItem, "value");
-						}
-						else {
-							elem = document.getElementsByName(varID)[0];
-							if (!elem) return;
-
-							if (varType == "String" || varType == "Integer" || varType == "Float") {
-								value = elem.value;
-
+						else if (varType == "List") {
+							if (elem.options.selectedIndex != -1)
+								value = elem.options[elem.options.selectedIndex].text;
+							else {
 								if (validate) {
-									if (is_required && value == "") {
+									if (is_required && elem.options.length > 0) {
 										aras.AlertError(aras.getResource("", "inbasketvd.variable_required", varLabel), undefined, undefined, topWnd.window);
 										return;
 									}
 								}
 							}
-							else if (varType == "Boolean") {
-								value = elem.checked ? "1" : "0";
-							}
-							else if (varType == "List") {
-								if (elem.options.selectedIndex != -1)
-									value = elem.options[elem.options.selectedIndex].text;
-								else {
-									if (validate) {
-										if (is_required && elem.options.length > 0) {
-											aras.AlertError(aras.getResource("", "inbasketvd.variable_required", varLabel), undefined, undefined, topWnd.window);
-											return;
-										}
-									}
-								}
-							}
 						}
-
-						body += "<Variable id='" + varID + "'>" + esc(value) + "</Variable>";
 					}
-					body += "</Variables>";
 
-					body += "<Authentication mode='" + AuthMode + "'>" + hash + "</Authentication>";
-
-					body += "<Comments>" + esc(document.getElementById("Comments").value) + "</Comments>";
-
-					if (mode == "complete")
-						body += "<Complete>1</Complete>";
-					else if (mode == "save")
-						body += "<Complete>0</Complete>";
-
-					body += "</Item>";
+					body += "<Variable id='" + varID + "'>" + esc(value) + "</Variable>";
 				}
+				body += "</Variables>";
+
+				body += "<Authentication mode='" + AuthMode + "'>" + hash + "</Authentication>";
+
+				body += "<Comments>" + esc(document.getElementById("Comments").value) + "</Comments>";
+
+				if (mode == "complete")
+					body += "<Complete>1</Complete>";
+				else if (mode == "save")
+					body += "<Complete>0</Complete>";
+
+				body += "</Item>";
 				var result = "<AML>";
 				var needForClearItem = false;
 				if (mode == "save") {
@@ -742,9 +720,7 @@
 				}
 				result += body;
 				result += "</AML>";
-				
-                //alert("" + body);return;
-				
+
 				// now OK to execute the Vote.
 				var res = aras.soapSend("ApplyAML", result);
 				if (res.isFault()) {
@@ -769,7 +745,6 @@
 							aras.itemsCache.deleteItem(itemId);
 						}
 					}
-						
 					if (window.onCompleteHandler){
 						window.onCompleteHandler(mode);
 					}
